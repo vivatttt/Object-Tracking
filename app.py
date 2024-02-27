@@ -17,7 +17,7 @@ class MainPage(QWidget):
 
         self.win_h = 800
         self.win_w = 1200
-
+    
         self.setFixedSize(1200, 800)
         self.setWindowTitle("Main window") 
         self.layout = QVBoxLayout(self)
@@ -27,7 +27,7 @@ class MainPage(QWidget):
 
         self.label = QLabel('Object Tracker 3000', self) 
         self.label.setStyleSheet("font-size: 42pt; font-weight: bold;")     
-        self.button_mode_1 = QPushButton('Mode 1', clicked=lambda: stacked_widget.setCurrentWidget(mode1_page))
+        self.button_mode_1 = QPushButton('Mode 1', clicked=lambda: (stacked_widget.setCurrentWidget(mode1_page)))
         self.button_mode_2 = QPushButton('Mode 2', clicked=lambda: stacked_widget.setCurrentWidget(mode2_page))
         self.button_settings = QPushButton('Settings', clicked=lambda: stacked_widget.setCurrentWidget(settings_page))
 
@@ -92,6 +92,7 @@ class SettingsPage(QWidget):
         video_label = QLabel('Выберите режим отображения видео', self) 
         slider_label = QLabel('Выберите минимальную площадь контура от 500 до 5000', self) 
         eps_label = QLabel('Выберите коэффициент аппроксимации контура от 0 до 20', self) 
+
         self.play_button = QPushButton('Старт', self)
         self.play_button.setFixedSize(100, 40)
         self.play_button.clicked.connect(self.play_video)
@@ -99,6 +100,10 @@ class SettingsPage(QWidget):
         self.pause_button = QPushButton('Стоп', self)
         self.pause_button.setFixedSize(100, 40)
         self.pause_button.clicked.connect(self.pause_video)
+
+        self.roi_button = QPushButton('Выбрать ROI', self)
+        self.roi_button.setFixedSize(100, 40)
+        self.roi_button.clicked.connect(self.select_roi)
 
         self.slider_min_area = QSlider(Qt.Horizontal)
 
@@ -117,7 +122,7 @@ class SettingsPage(QWidget):
         self.checkbox_shadows = QCheckBox('Убрать тени', self)
         self.checkbox_noise = QCheckBox('Убрать шум ', self)
 
-        self.home_button = QPushButton('Go to Main Page', clicked=lambda: stacked_widget.setCurrentWidget(main_page))
+        self.home_button = QPushButton('Go to Main Page', clicked=lambda: (stacked_widget.setCurrentWidget(main_page), self.pause_video()))
         self.home_button.setFixedSize(100, 40)
 
         layout_control = QVBoxLayout()
@@ -143,6 +148,9 @@ class SettingsPage(QWidget):
 
         layout_control.addWidget(self.play_button, 0, Qt.AlignHCenter)
         layout_control.addWidget(self.pause_button, 0, Qt.AlignHCenter)
+        layout_control.addSpacing(30)
+
+        layout_control.addWidget(self.roi_button, 0, Qt.AlignHCenter)
         
         layout_control.addStretch(1)
         layout_control.addWidget(self.home_button, 0, Qt.AlignHCenter)
@@ -153,10 +161,10 @@ class SettingsPage(QWidget):
         
 
         layout.addLayout(layout_control)
-
+        
+        self.roi = [0, 0, int(self.win_w * self.percent // 100), int(self.win_h * self.percent // 100)]
         self.update_frame() # показываем первый кадр
-      
-
+        
     def play_video(self):
         self.timer.start(33)  
 
@@ -167,10 +175,28 @@ class SettingsPage(QWidget):
 
         ret, frame = self.video_capture.read()
         frame = self.r_resize(frame)
+        frame_copy = frame.copy()
+
+        self.cur_shot = frame
+        
+        cropped = frame[int(self.roi[1]) : int(self.roi[1]) + int(self.roi[3]) , int(self.roi[0]) : int(self.roi[0]) + int(self.roi[2])]
 
         if ret:
-            if self.comboBox.currentText() != "Стандартная":
+            if self.comboBox.currentText() == "Обработанная":
                 mask = self.object_detector.apply(frame)
+
+                if self.checkbox_shadows.isChecked():
+                    _, mask = cv2.threshold(mask, 254, 255, cv2.THRESH_BINARY)
+
+                if self.checkbox_noise.isChecked():
+                    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+                    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+                frame = mask
+
+            elif self.comboBox.currentText() in ('Контуры', 'Отслеживание'):
+
+                mask = self.object_detector.apply(cropped)
 
                 if self.checkbox_shadows.isChecked():
                     _, mask = cv2.threshold(mask, 254, 255, cv2.THRESH_BINARY)
@@ -181,14 +207,14 @@ class SettingsPage(QWidget):
 
                 contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                 eps = int(self.slider_eps.value())
+                
                 if self.comboBox.currentText() == 'Контуры':
-                    
                     for con in contours:
                         con = cv2.approxPolyDP(con, eps, closed=True)
-                        cv2.drawContours(frame, [con], -1, (0, 255, 0), 1)
+                        cv2.drawContours(cropped, [con], -1, (0, 255, 0), 1)
+            
+                else:
                 
-                elif self.comboBox.currentText() == 'Отслеживание':
-
                     try:
                         rects = filter_contours(contours, self.slider_min_area.value(), eps)
                     except Exception as e:
@@ -201,10 +227,10 @@ class SettingsPage(QWidget):
 
                     for rect in rects:
                         x, y, w, h = rect
-                        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 2)
+                        cv2.rectangle(cropped, (x, y), (x + w, y + h), (255, 0, 255), 2)
                     
-                else:
-                    frame = mask
+                    
+                
 
             # преобразование картинки в формат для PyQt5
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -215,9 +241,18 @@ class SettingsPage(QWidget):
             self.video_label.setPixmap(pixmap)
 
         else:
-            self.video_capture = cv2.VideoCapture(self.video)  
+            self.video_.set(cv2.CAP_PROP_POS_FRAMES, 0) # если видео закончилось, воспроизводим его заново
 
+    def select_roi(self):
+        self.pause_video()
+        
+        roi = cv2.selectROI("select the ROI", self.cur_shot)
+        cv2.destroyWindow("select the ROI")  
+        self.roi = list(roi)
 
+        self.play_video()
+
+        
     def r_resize(self, shot):
 
         height = int(self.win_h / 100 * self.percent)
