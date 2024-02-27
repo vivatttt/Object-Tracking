@@ -1,12 +1,9 @@
-import sys
 import cv2
 import os
 from pathlib import Path
-from PyQt5.QtCore import Qt
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QSlider, QPushButton, QHBoxLayout
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QStackedWidget, QComboBox, QCheckBox
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QSlider, QPushButton, QHBoxLayout, QStackedWidget, QComboBox, QCheckBox
 from filter_countours import filter_contours
 
 class MainPage(QWidget):
@@ -506,8 +503,3 @@ class MainWindow(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(self.stacked_widget)
 
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    main_window = MainWindow()
-    main_window.show()
-    sys.exit(app.exec_())
