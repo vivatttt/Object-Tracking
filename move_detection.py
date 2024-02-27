@@ -190,10 +190,7 @@ def main():
 
         frame_copy = frame.copy()
 
-        cropped = frame[int(r[1]):int(r[1])+int(r[3]),int(r[0]):int(r[0])+int(r[2])]
-
-        
-
+        cropped = frame[int(r[1]) : int(r[1]) + int(r[3]) , int(r[0]) : int(r[0]) + int(r[2])]
 
         cropped_copy = cropped.copy()
 

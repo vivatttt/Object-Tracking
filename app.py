@@ -1,10 +1,8 @@
 import sys
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QStackedWidget, QHBoxLayout, QLabel
-import sys
 import cv2
 import os
 from pathlib import Path
+from PyQt5.QtCore import Qt
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QSlider, QPushButton, QHBoxLayout
@@ -48,18 +46,234 @@ class MainPage(QWidget):
         self.layout.addStretch(1)
 
 class Mode1Page(QWidget):
-    def __init__(self, stacked_widget):
+    def __init__(self, stacked_widget, input_widget):
         super().__init__()
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(QPushButton('Go to Main Page', clicked=lambda: stacked_widget.setCurrentWidget(main_page)))
+        self.percent = 90
+        self.win_h = 800
+        self.win_w = 1200
+
+        self.setFixedSize(1200, 800)
+        self.setWindowTitle("Settings") 
+
+        dirname = os.path.dirname(__file__)
+        self.video = os.path.join(dirname, str(Path('videos', 'traffic4.mp4')))
+
+        self.video_capture = cv2.VideoCapture(self.video)  
+        self.timer = QTimer(self)
+        
+        self.timer.timeout.connect(self.update_frame)
+        self.object_detector = cv2.createBackgroundSubtractorMOG2()
+        
+        self.input_widget = input_widget # получаем класс Settings, из которого достаем измененные параметры для настройки
+        self.init_ui(stacked_widget)
+
+    def init_ui(self, stacked_widget):
+
+        self.video_label = QLabel(self)
+        self.video_label.setAlignment(Qt.AlignCenter)
+
+        self.play_button = QPushButton('Старт', self)
+        self.play_button.setFixedSize(100, 40)
+        self.play_button.clicked.connect(self.play_video)
+
+        self.pause_button = QPushButton('Стоп', self)
+        self.pause_button.setFixedSize(100, 40)
+        self.pause_button.clicked.connect(self.pause_video)
+
+        self.home_button = QPushButton('Go to Main Page', clicked=lambda: (stacked_widget.setCurrentWidget(main_page), self.pause_video()))
+        self.home_button.setFixedSize(100, 40)
+
+        layout_control = QVBoxLayout()  
+
+        layout_control.addStretch(1)
+        layout_control.addWidget(self.play_button, 0, Qt.AlignHCenter)
+        layout_control.addWidget(self.pause_button, 0, Qt.AlignHCenter)
+        layout_control.addStretch(1)
+        layout_control.addWidget(self.home_button, 0, Qt.AlignHCenter)
+        layout_control.addSpacing(50)
+      
+        layout = QHBoxLayout(self)
+        layout.addWidget(self.video_label)
+        
+
+        layout.addLayout(layout_control)
+        
+        self.roi = [0, 0, int(self.win_w * self.percent // 100), int(self.win_h * self.percent // 100)]
+        self.update_frame() # показываем первый кадр
+
+    def update_parametres(self):
+        self.received_percent, self.slider_min_area, self.slider_eps, self.checkbox_noise, self.checkbox_shadows, self.roi = self.input_widget.get_data()
+        self.roi = list(map(lambda el: int(el * self.percent // self.received_percent), self.roi))
+
+    def play_video(self):
+        self.timer.start(33)  
+
+    def pause_video(self):
+        self.timer.stop()
+
+    def update_frame(self):
+
+        ret, frame = self.video_capture.read()
+
+        frame = self.r_resize(frame)
+
+        self.update_parametres() # получаем значения из Settings и обновляем их
+
+        self.cur_shot = frame
+        
+        cropped = frame[int(self.roi[1]) : int(self.roi[1]) + int(self.roi[3]) , int(self.roi[0]) : int(self.roi[0]) + int(self.roi[2])]
+
+        if ret:
+            mask = self.object_detector.apply(cropped)
+
+            if self.checkbox_shadows:
+                _, mask = cv2.threshold(mask, 254, 255, cv2.THRESH_BINARY)
+
+            if self.checkbox_noise:
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+                mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            eps = int(self.slider_eps)
+                               
+            try:
+                rects = filter_contours(contours, self.slider_min_area, eps)
+            except Exception as e:
+                rects = []
+                for con in contours:
+                    con = cv2.approxPolyDP(con, eps, closed=True)
+                    area = cv2.contourArea(con)
+                    if area > self.slider_min_area:
+                        rects.append(cv2.boundingRect(con))
+
+            for rect in rects:
+                x, y, w, h = rect
+                cv2.rectangle(cropped, (x, y), (x + w, y + h), (255, 0, 255), 2)
+
+            # преобразование картинки в формат для PyQt5
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            height, width, _ = frame.shape
+            bytes_per_line = 3 * width
+            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            pixmap = QPixmap.fromImage(q_image)
+            self.video_label.setPixmap(pixmap)
+
+        else:
+            self.video_.set(cv2.CAP_PROP_POS_FRAMES, 0) # если видео закончилось, воспроизводим его заново
+       
+    def r_resize(self, shot):
+
+        height = int(self.win_h / 100 * self.percent)
+        width = int(self.win_w / 100 * self.percent)
+        return cv2.resize(shot, (width, height))
+    
 
 class Mode2Page(QWidget):
     def __init__(self, stacked_widget):
         super().__init__()
 
-        layout = QVBoxLayout(self)
-        layout.addWidget(QPushButton('Go to Main Page', clicked=lambda: stacked_widget.setCurrentWidget(main_page)))
+        self.percent = 90
+        self.win_h = 800
+        self.win_w = 1200
+
+        self.setFixedSize(1200, 800)
+        self.setWindowTitle("Settings") 
+
+        dirname = os.path.dirname(__file__)
+        self.video = os.path.join(dirname, str(Path('videos', 'traffic4.mp4')))
+
+        self.video_capture = cv2.VideoCapture(self.video)  
+        self.timer = QTimer(self)
+        
+        self.timer.timeout.connect(self.update_frame)
+        self.object_detector = cv2.createBackgroundSubtractorMOG2()
+        
+        
+        self.init_ui(stacked_widget)
+
+    def init_ui(self, stacked_widget):
+
+        self.play_button = QPushButton('Старт', self)
+        self.play_button.setFixedSize(100, 40)
+        self.play_button.clicked.connect(self.play_video)
+
+        self.pause_button = QPushButton('Стоп', self)
+        self.pause_button.setFixedSize(100, 40)
+        self.pause_button.clicked.connect(self.pause_video)
+
+        self.roi_button = QPushButton('Выбрать ROI', self)
+        self.roi_button.setFixedSize(100, 40)
+        self.roi_button.clicked.connect(self.object_selection)
+
+        self.home_button = QPushButton('Go to Main Page', clicked=lambda: (stacked_widget.setCurrentWidget(main_page), self.pause_video(), cv2.destroyAllWindows()))
+        self.home_button.setFixedSize(100, 40)
+
+        layout_control = QVBoxLayout()  
+
+        layout_control.addStretch(1)
+        layout_control.addWidget(self.play_button, 0, Qt.AlignHCenter)
+        layout_control.addWidget(self.pause_button, 0, Qt.AlignHCenter)
+        layout_control.addSpacing(50)
+        layout_control.addWidget(self.roi_button, 0, Qt.AlignHCenter)
+        layout_control.addStretch(1)
+        layout_control.addWidget(self.home_button, 0, Qt.AlignHCenter)
+        layout_control.addSpacing(50)
+      
+        layout = QHBoxLayout(self)
+    
+        layout.addLayout(layout_control)
+
+        self.trackers = [] # массив трекеров
+
+    def play_video(self):
+        self.timer.start(33)  
+
+    def pause_video(self):
+        self.timer.stop()
+
+    def update_frame(self):
+
+        ret, frame = self.video_capture.read()
+
+        frame = self.r_resize(frame)
+
+        
+        self.cur_shot = frame
+
+        if ret:
+            
+            i = 0
+            while i != len(self.trackers):
+                _, box = self.trackers[i].update(frame)
+                if sum(box) == 0:
+                    del self.trackers[i]
+                else:
+                    (x, y, w, h) = [int(v) for v in box]
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 2, 1)
+                    i += 1
+
+            cv2.imshow('tracking', frame)
+
+        else:
+            self.video_.set(cv2.CAP_PROP_POS_FRAMES, 0) # если видео закончилось, воспроизводим его заново
+
+    def object_selection(self):
+        self.pause_video()
+
+        roi = cv2.selectROI('tracking', self.cur_shot)
+        tracker = cv2.legacy.TrackerKCF_create()
+        tracker.init(self.cur_shot, roi)
+        
+        self.trackers.append(tracker)
+
+        self.play_video()
+
+    def r_resize(self, shot):
+
+        height = int(self.win_h / 100 * self.percent)
+        width = int(self.win_w / 100 * self.percent)
+        return cv2.resize(shot, (width, height))
 
 class SettingsPage(QWidget):
     def __init__(self, stacked_widget):
@@ -170,6 +384,9 @@ class SettingsPage(QWidget):
 
     def pause_video(self):
         self.timer.stop()
+    
+    def get_data(self):
+        return [self.percent, self.slider_min_area.value(), self.slider_eps.value(), self.checkbox_noise.isChecked(), self.checkbox_shadows.isChecked(), self.roi]
 
     def update_frame(self):
 
@@ -271,9 +488,10 @@ class MainWindow(QWidget):
         # Создаем виджеты для каждой страницы
         global main_page, mode1_page, mode2_page, settings_page
         main_page = MainPage(self.stacked_widget)
-        mode1_page = Mode1Page(self.stacked_widget)
-        mode2_page = Mode2Page(self.stacked_widget)
+        
         settings_page = SettingsPage(self.stacked_widget)
+        mode1_page = Mode1Page(self.stacked_widget, settings_page)
+        mode2_page = Mode2Page(self.stacked_widget)
 
         # Добавляем страницы в QStackedWidget
         self.stacked_widget.addWidget(main_page)
