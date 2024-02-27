@@ -32,3 +32,5 @@ And finally launch the *Object Tracker 3000 (!!)*
 ```
 python main.py
 ```
+
+![python2024-02-2800-38-04-ezgif com-video-to-gif-converter](https://github.com/vivatttt/Object-Tracking/assets/143903636/36c85631-cd30-4a39-ad24-e71e143061c1)
