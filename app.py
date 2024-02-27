@@ -1,0 +1,260 @@
+import sys
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QStackedWidget, QHBoxLayout, QLabel
+import sys
+import cv2
+import os
+from pathlib import Path
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QSlider, QPushButton, QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QStackedWidget, QComboBox, QCheckBox
+from filter_countours import filter_contours
+
+class MainPage(QWidget):
+    def __init__(self, stacked_widget):
+        super().__init__()
+
+        self.win_h = 800
+        self.win_w = 1200
+
+        self.setFixedSize(1200, 800)
+        self.setWindowTitle("Main window") 
+        self.layout = QVBoxLayout(self)
+      
+        self.init_ui(stacked_widget)
+    def init_ui(self, stacked_widget):
+
+        self.label = QLabel('Object Tracker 3000', self) 
+        self.label.setStyleSheet("font-size: 42pt; font-weight: bold;")     
+        self.button_mode_1 = QPushButton('Mode 1', clicked=lambda: stacked_widget.setCurrentWidget(mode1_page))
+        self.button_mode_2 = QPushButton('Mode 2', clicked=lambda: stacked_widget.setCurrentWidget(mode2_page))
+        self.button_settings = QPushButton('Settings', clicked=lambda: stacked_widget.setCurrentWidget(settings_page))
+
+
+        self.button_mode_1.setFixedSize(100, 40)
+        self.button_mode_2.setFixedSize(100, 40)
+        self.button_settings.setFixedSize(100, 40)
+
+        self.layout.addStretch(1)
+        self.layout.addWidget(self.label, 0, Qt.AlignHCenter)
+        self.layout.addSpacing(50)
+        self.layout.addWidget(self.button_mode_1, 0,  Qt.AlignHCenter)
+        self.layout.addSpacing(20)
+        self.layout.addWidget(self.button_mode_2, 0,  Qt.AlignHCenter)
+        self.layout.addSpacing(20)
+        self.layout.addWidget(self.button_settings, 0, Qt.AlignHCenter)
+
+        self.layout.addStretch(1)
+
+class Mode1Page(QWidget):
+    def __init__(self, stacked_widget):
+        super().__init__()
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QPushButton('Go to Main Page', clicked=lambda: stacked_widget.setCurrentWidget(main_page)))
+
+class Mode2Page(QWidget):
+    def __init__(self, stacked_widget):
+        super().__init__()
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(QPushButton('Go to Main Page', clicked=lambda: stacked_widget.setCurrentWidget(main_page)))
+
+class SettingsPage(QWidget):
+    def __init__(self, stacked_widget):
+        super().__init__()
+
+        self.percent = 60
+        self.win_h = 800
+        self.win_w = 1200
+
+        self.setFixedSize(1200, 800)
+        self.setWindowTitle("Settings") 
+
+        dirname = os.path.dirname(__file__)
+        self.video = os.path.join(dirname, str(Path('videos', 'traffic4.mp4')))
+
+        self.video_capture = cv2.VideoCapture(self.video)  
+        self.timer = QTimer(self)
+        
+        self.timer.timeout.connect(self.update_frame)
+        self.object_detector = cv2.createBackgroundSubtractorMOG2()
+
+        self.init_ui(stacked_widget)
+
+    def init_ui(self, stacked_widget):
+
+        self.video_label = QLabel(self)
+        self.video_label.setAlignment(Qt.AlignCenter)
+
+        
+        video_label = QLabel('Выберите режим отображения видео', self) 
+        slider_label = QLabel('Выберите минимальную площадь контура от 500 до 5000', self) 
+        eps_label = QLabel('Выберите коэффициент аппроксимации контура от 0 до 20', self) 
+        self.play_button = QPushButton('Старт', self)
+        self.play_button.setFixedSize(100, 40)
+        self.play_button.clicked.connect(self.play_video)
+
+        self.pause_button = QPushButton('Стоп', self)
+        self.pause_button.setFixedSize(100, 40)
+        self.pause_button.clicked.connect(self.pause_video)
+
+        self.slider_min_area = QSlider(Qt.Horizontal)
+
+        self.slider_min_area.setMinimum(500)
+        self.slider_min_area.setMaximum(5000)
+
+        self.slider_eps = QSlider(Qt.Horizontal)
+
+        self.slider_eps.setMinimum(0)
+        self.slider_eps.setMaximum(20)
+   
+
+        self.comboBox = QComboBox(self)
+        self.comboBox.addItems(['Стандартная', 'Обработанная', 'Контуры', 'Отслеживание'])
+
+        self.checkbox_shadows = QCheckBox('Убрать тени', self)
+        self.checkbox_noise = QCheckBox('Убрать шум ', self)
+
+        self.home_button = QPushButton('Go to Main Page', clicked=lambda: stacked_widget.setCurrentWidget(main_page))
+        self.home_button.setFixedSize(100, 40)
+
+        layout_control = QVBoxLayout()
+        layout_control.addStretch(1)
+        
+        layout_control.addWidget(video_label, 0, Qt.AlignHCenter)
+        layout_control.addSpacing(10)
+        layout_control.addWidget(self.comboBox, 0, Qt.AlignHCenter)
+        layout_control.addSpacing(60)
+
+        layout_control.addWidget(slider_label, 0, Qt.AlignHCenter)
+        layout_control.addSpacing(10)
+        layout_control.addWidget(self.slider_min_area)
+        layout_control.addSpacing(30)
+
+        layout_control.addWidget(eps_label, 0, Qt.AlignHCenter)
+        layout_control.addSpacing(10)
+        layout_control.addWidget(self.slider_eps)
+        layout_control.addSpacing(30)
+    
+        layout_control.addWidget(self.checkbox_shadows, 0, Qt.AlignHCenter)
+        layout_control.addWidget(self.checkbox_noise, 0, Qt.AlignHCenter)
+
+        layout_control.addWidget(self.play_button, 0, Qt.AlignHCenter)
+        layout_control.addWidget(self.pause_button, 0, Qt.AlignHCenter)
+        
+        layout_control.addStretch(1)
+        layout_control.addWidget(self.home_button, 0, Qt.AlignHCenter)
+        layout_control.addSpacing(50)
+      
+        layout = QHBoxLayout(self)
+        layout.addWidget(self.video_label)
+        
+
+        layout.addLayout(layout_control)
+
+        self.update_frame() # показываем первый кадр
+      
+
+    def play_video(self):
+        self.timer.start(33)  
+
+    def pause_video(self):
+        self.timer.stop()
+
+    def update_frame(self):
+
+        ret, frame = self.video_capture.read()
+        frame = self.r_resize(frame)
+
+        if ret:
+            if self.comboBox.currentText() != "Стандартная":
+                mask = self.object_detector.apply(frame)
+
+                if self.checkbox_shadows.isChecked():
+                    _, mask = cv2.threshold(mask, 254, 255, cv2.THRESH_BINARY)
+
+                if self.checkbox_noise.isChecked():
+                    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+                    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+                contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                eps = int(self.slider_eps.value())
+                if self.comboBox.currentText() == 'Контуры':
+                    
+                    for con in contours:
+                        con = cv2.approxPolyDP(con, eps, closed=True)
+                        cv2.drawContours(frame, [con], -1, (0, 255, 0), 1)
+                
+                elif self.comboBox.currentText() == 'Отслеживание':
+
+                    try:
+                        rects = filter_contours(contours, self.slider_min_area.value(), eps)
+                    except Exception as e:
+                        rects = []
+                        for con in contours:
+                            con = cv2.approxPolyDP(con, eps, closed=True)
+                            area = cv2.contourArea(con)
+                            if area > self.slider_min_area.value():
+                                rects.append(cv2.boundingRect(con))
+
+                    for rect in rects:
+                        x, y, w, h = rect
+                        cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 255), 2)
+                    
+                else:
+                    frame = mask
+
+            # преобразование картинки в формат для PyQt5
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            height, width, _ = frame.shape
+            bytes_per_line = 3 * width
+            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            pixmap = QPixmap.fromImage(q_image)
+            self.video_label.setPixmap(pixmap)
+
+        else:
+            self.video_capture = cv2.VideoCapture(self.video)  
+
+
+    def r_resize(self, shot):
+
+        height = int(self.win_h / 100 * self.percent)
+        width = int(self.win_w / 100 * self.percent)
+        return cv2.resize(shot, (width, height))
+    
+    
+
+
+class MainWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+
+        self.stacked_widget = QStackedWidget(self)
+
+        # Создаем виджеты для каждой страницы
+        global main_page, mode1_page, mode2_page, settings_page
+        main_page = MainPage(self.stacked_widget)
+        mode1_page = Mode1Page(self.stacked_widget)
+        mode2_page = Mode2Page(self.stacked_widget)
+        settings_page = SettingsPage(self.stacked_widget)
+
+        # Добавляем страницы в QStackedWidget
+        self.stacked_widget.addWidget(main_page)
+        self.stacked_widget.addWidget(mode1_page)
+        self.stacked_widget.addWidget(mode2_page)
+        self.stacked_widget.addWidget(settings_page)
+
+        # Устанавливаем главную страницу в качестве текущей
+        self.stacked_widget.setCurrentWidget(main_page)
+
+        # Размещаем QStackedWidget в основном макете
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.stacked_widget)
+
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    main_window = MainWindow()
+    main_window.show()
+    sys.exit(app.exec_())
