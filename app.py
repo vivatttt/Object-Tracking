@@ -3,44 +3,97 @@ import os
 from pathlib import Path
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QSlider, QPushButton, QHBoxLayout, QStackedWidget, QComboBox, QCheckBox
+from PyQt5.QtWidgets import QFileDialog, QWidget, QLabel, QVBoxLayout, QSlider, QPushButton, QHBoxLayout, QStackedWidget, QComboBox, QCheckBox
 from filter_countours import filter_contours
+
+path_to_file = None
 
 class MainPage(QWidget):
     def __init__(self, stacked_widget):
         super().__init__()
 
+        self.stacked_widget = stacked_widget
+        self.initUI()
+    
+    def initUI(self):
         self.win_h = 800
         self.win_w = 1200
     
-        self.setFixedSize(1200, 800)
+        self.setFixedSize(self.win_w, self.win_h)
         self.setWindowTitle("Main window") 
         self.layout = QVBoxLayout(self)
       
-        self.init_ui(stacked_widget)
-    def init_ui(self, stacked_widget):
-
         self.label = QLabel('Object Tracker 3000', self) 
         self.label.setStyleSheet("font-size: 42pt; font-weight: bold;")     
-        self.button_mode_1 = QPushButton('Mode 1', clicked=lambda: (stacked_widget.setCurrentWidget(mode1_page)))
-        self.button_mode_2 = QPushButton('Mode 2', clicked=lambda: stacked_widget.setCurrentWidget(mode2_page))
-        self.button_settings = QPushButton('Settings', clicked=lambda: stacked_widget.setCurrentWidget(settings_page))
-
+        self.button_mode_1 = QPushButton('Mode 1')
+        self.button_mode_2 = QPushButton('Mode 2')
+        self.button_settings = QPushButton('Settings')
+        self.button_file = QPushButton('Choose file', self)
+        self.button_file.clicked.connect(self.showFileDialog)
 
         self.button_mode_1.setFixedSize(100, 40)
         self.button_mode_2.setFixedSize(100, 40)
         self.button_settings.setFixedSize(100, 40)
+        self.button_file.setFixedSize(100, 40)
 
-        self.layout.addStretch(1)
-        self.layout.addWidget(self.label, 0, Qt.AlignHCenter)
-        self.layout.addSpacing(50)
-        self.layout.addWidget(self.button_mode_1, 0,  Qt.AlignHCenter)
-        self.layout.addSpacing(20)
-        self.layout.addWidget(self.button_mode_2, 0,  Qt.AlignHCenter)
-        self.layout.addSpacing(20)
-        self.layout.addWidget(self.button_settings, 0, Qt.AlignHCenter)
+        self.updateLayout()
 
+    def updateLayout(self):
+
+        for i in reversed(range(self.layout.count())): 
+            widget = self.layout.itemAt(i).widget()
+            if widget is not None: 
+                widget.setParent(None)
+        
         self.layout.addStretch(1)
+        global path_to_file
+        if path_to_file:
+            self.layout.addWidget(self.label, 0, Qt.AlignHCenter)
+            self.layout.addSpacing(100)
+            self.layout.addWidget(self.button_mode_1, 0, Qt.AlignHCenter)
+            self.layout.addSpacing(20)
+            self.layout.addWidget(self.button_mode_2, 0, Qt.AlignHCenter)
+            self.layout.addSpacing(20)
+            self.layout.addWidget(self.button_settings, 0, Qt.AlignHCenter)
+            self.layout.addSpacing(20)
+            self.layout.addWidget(self.button_file, 0, Qt.AlignHCenter)
+        else:
+            self.layout.addWidget(self.label, 0, Qt.AlignHCenter)
+            self.layout.addSpacing(60)
+            self.layout.addWidget(self.button_file, 0, Qt.AlignHCenter)
+        self.layout.addStretch(1)
+        self.connectButtons() 
+    
+    def connectButtons(self):
+        self.button_mode_1.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(mode1_page))
+        self.button_mode_2.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(mode2_page))
+        self.button_settings.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(settings_page))
+    
+    def showFileDialog(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.ReadOnly
+        global path_to_file
+        
+        # если путь до файла не был задан (а раз зашли в эту функцию, то будет задан), то меняем виджеты на главной странице 
+        flag = 1 if not path_to_file else 0 
+        path_to_file, _ = QFileDialog.getOpenFileName(self, 
+                                                      "Open File", 
+                                                      "", 
+                                                      "MP4 Files (*.mp4);;All Files (*)", 
+                                                      options=options)
+    
+        if path_to_file:
+            self.updateAllPages()
+            if flag:
+                self.updateLayout()
+                self.connectButtons()
+
+    def updateAllPages(self):   
+        global mode1_page, mode2_page, settings_page
+
+        mode1_page.update_file()
+        mode2_page.update_file()
+        settings_page.update_file()
 
 class Mode1Page(QWidget):
     def __init__(self, stacked_widget, input_widget):
@@ -52,18 +105,21 @@ class Mode1Page(QWidget):
 
         self.setFixedSize(1200, 800)
         self.setWindowTitle("Settings") 
-
-        dirname = os.path.dirname(__file__)
-        self.video = os.path.join(dirname, str(Path('videos', 'traffic4.mp4')))
-
-        self.video_capture = cv2.VideoCapture(self.video)  
+        
         self.timer = QTimer(self)
         
-        self.timer.timeout.connect(self.update_frame)
-        self.object_detector = cv2.createBackgroundSubtractorMOG2()
         
         self.input_widget = input_widget # получаем класс Settings, из которого достаем измененные параметры для настройки
         self.init_ui(stacked_widget)
+
+    def update_file(self):
+        global path_to_file
+        
+        self.video = path_to_file
+        self.video_capture = cv2.VideoCapture(self.video)  
+        self.object_detector = cv2.createBackgroundSubtractorMOG2()
+        self.timer.timeout.connect(self.update_frame)
+        self.update_frame() # показываем первый кадр
 
     def init_ui(self, stacked_widget):
 
@@ -78,7 +134,7 @@ class Mode1Page(QWidget):
         self.pause_button.setFixedSize(100, 40)
         self.pause_button.clicked.connect(self.pause_video)
 
-        self.home_button = QPushButton('Go to Main Page', clicked=lambda: (stacked_widget.setCurrentWidget(main_page), self.pause_video()))
+        self.home_button = QPushButton('Main Page', clicked=lambda: (stacked_widget.setCurrentWidget(main_page), self.pause_video()))
         self.home_button.setFixedSize(100, 40)
 
         layout_control = QVBoxLayout()  
@@ -97,7 +153,7 @@ class Mode1Page(QWidget):
         layout.addLayout(layout_control)
         
         self.roi = [0, 0, int(self.win_w * self.percent // 100), int(self.win_h * self.percent // 100)]
-        self.update_frame() # показываем первый кадр
+        
 
     def update_parametres(self):
         self.received_percent, self.slider_min_area, self.slider_eps, self.checkbox_noise, self.checkbox_shadows, self.roi = self.input_widget.get_data()
@@ -147,7 +203,7 @@ class Mode1Page(QWidget):
             for rect in rects:
                 x, y, w, h = rect
                 cv2.rectangle(cropped, (x, y), (x + w, y + h), (255, 0, 255), 2)
-
+            
             # преобразование картинки в формат для PyQt5
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             height, width, _ = frame.shape
@@ -177,17 +233,19 @@ class Mode2Page(QWidget):
         self.setFixedSize(1200, 800)
         self.setWindowTitle("Settings") 
 
-        dirname = os.path.dirname(__file__)
-        self.video = os.path.join(dirname, str(Path('videos', 'traffic4.mp4')))
-
-        self.video_capture = cv2.VideoCapture(self.video)  
+        
         self.timer = QTimer(self)
-        
-        self.timer.timeout.connect(self.update_frame)
-        self.object_detector = cv2.createBackgroundSubtractorMOG2()
-        
-        
+            
         self.init_ui(stacked_widget)
+        
+    def update_file(self):
+        global path_to_file
+
+        self.video = path_to_file
+
+        self.video_capture = cv2.VideoCapture(self.video)
+        self.object_detector = cv2.createBackgroundSubtractorMOG2()  
+        self.timer.timeout.connect(self.update_frame)
 
     def init_ui(self, stacked_widget):
 
@@ -203,7 +261,7 @@ class Mode2Page(QWidget):
         self.roi_button.setFixedSize(100, 40)
         self.roi_button.clicked.connect(self.object_selection)
 
-        self.home_button = QPushButton('Go to Main Page', clicked=lambda: (stacked_widget.setCurrentWidget(main_page), self.pause_video(), cv2.destroyAllWindows()))
+        self.home_button = QPushButton('Main Page', clicked=lambda: (stacked_widget.setCurrentWidget(main_page), self.pause_video(), cv2.destroyAllWindows()))
         self.home_button.setFixedSize(100, 40)
 
         layout_control = QVBoxLayout()  
@@ -282,18 +340,22 @@ class SettingsPage(QWidget):
 
         self.setFixedSize(1200, 800)
         self.setWindowTitle("Settings") 
-
-        dirname = os.path.dirname(__file__)
-        self.video = os.path.join(dirname, str(Path('videos', 'traffic4.mp4')))
-
-        self.video_capture = cv2.VideoCapture(self.video)  
+  
         self.timer = QTimer(self)
         
+        
+        self.init_ui(stacked_widget)
+
+    def update_file(self):
+        global path_to_file
+
+        self.video = path_to_file
+
+        self.video_capture = cv2.VideoCapture(self.video)
         self.timer.timeout.connect(self.update_frame)
         self.object_detector = cv2.createBackgroundSubtractorMOG2()
 
-        self.init_ui(stacked_widget)
-
+        self.update_frame() # показываем первый кадр
     def init_ui(self, stacked_widget):
 
         self.video_label = QLabel(self)
@@ -333,7 +395,7 @@ class SettingsPage(QWidget):
         self.checkbox_shadows = QCheckBox('Убрать тени', self)
         self.checkbox_noise = QCheckBox('Убрать шум ', self)
 
-        self.home_button = QPushButton('Go to Main Page', clicked=lambda: (stacked_widget.setCurrentWidget(main_page), self.pause_video()))
+        self.home_button = QPushButton('Main Page', clicked=lambda: (stacked_widget.setCurrentWidget(main_page), self.pause_video()))
         self.home_button.setFixedSize(100, 40)
 
         layout_control = QVBoxLayout()
@@ -374,7 +436,7 @@ class SettingsPage(QWidget):
         layout.addLayout(layout_control)
         
         self.roi = [0, 0, int(self.win_w * self.percent // 100), int(self.win_h * self.percent // 100)]
-        self.update_frame() # показываем первый кадр
+        
         
     def play_video(self):
         self.timer.start(33)  
@@ -471,6 +533,7 @@ class SettingsPage(QWidget):
 
         height = int(self.win_h / 100 * self.percent)
         width = int(self.win_w / 100 * self.percent)
+
         return cv2.resize(shot, (width, height))
     
     
