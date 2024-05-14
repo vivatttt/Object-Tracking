@@ -4,7 +4,7 @@ from pathlib import Path
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import QFileDialog, QWidget, QLabel, QVBoxLayout, QSlider, QPushButton, QHBoxLayout, QStackedWidget, QComboBox, QCheckBox
-from filter_countours import filter_contours
+from utils.filter_countours import filter_contours
 
 path_to_file = None
 
