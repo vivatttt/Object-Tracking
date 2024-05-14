@@ -169,15 +169,15 @@ class Mode1Page(QWidget):
 
         ret, frame = self.video_capture.read()
 
-        frame = self.r_resize(frame)
-
-        self.update_parametres() # получаем значения из Settings и обновляем их
-
-        self.cur_shot = frame
-        
-        cropped = frame[int(self.roi[1]) : int(self.roi[1]) + int(self.roi[3]) , int(self.roi[0]) : int(self.roi[0]) + int(self.roi[2])]
-
         if ret:
+            frame = self.r_resize(frame)
+
+            self.update_parametres() # получаем значения из Settings и обновляем их
+
+            self.cur_shot = frame
+            
+            cropped = frame[int(self.roi[1]) : int(self.roi[1]) + int(self.roi[3]) , int(self.roi[0]) : int(self.roi[0]) + int(self.roi[2])]
+
             mask = self.object_detector.apply(cropped)
 
             if self.checkbox_shadows:
@@ -213,7 +213,7 @@ class Mode1Page(QWidget):
             self.video_label.setPixmap(pixmap)
 
         else:
-            self.video_.set(cv2.CAP_PROP_POS_FRAMES, 0) # если видео закончилось, воспроизводим его заново
+            self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, 0) # если видео закончилось, воспроизводим его заново
        
     def r_resize(self, shot):
 
@@ -291,13 +291,10 @@ class Mode2Page(QWidget):
 
         ret, frame = self.video_capture.read()
 
-        frame = self.r_resize(frame)
-
-        
-        self.cur_shot = frame
-
         if ret:
-            
+            frame = self.r_resize(frame)
+            self.cur_shot = frame
+
             i = 0
             while i != len(self.trackers):
                 _, box = self.trackers[i].update(frame)
@@ -311,7 +308,7 @@ class Mode2Page(QWidget):
             cv2.imshow('tracking', frame)
 
         else:
-            self.video_.set(cv2.CAP_PROP_POS_FRAMES, 0) # если видео закончилось, воспроизводим его заново
+            self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, 0) # если видео закончилось, воспроизводим его заново
 
     def object_selection(self):
         self.pause_video()
@@ -450,14 +447,17 @@ class SettingsPage(QWidget):
     def update_frame(self):
 
         ret, frame = self.video_capture.read()
-        frame = self.r_resize(frame)
-        frame_copy = frame.copy()
-
-        self.cur_shot = frame
         
-        cropped = frame[int(self.roi[1]) : int(self.roi[1]) + int(self.roi[3]) , int(self.roi[0]) : int(self.roi[0]) + int(self.roi[2])]
 
         if ret:
+            
+            frame = self.r_resize(frame)
+            frame_copy = frame.copy()
+
+            self.cur_shot = frame
+            
+            cropped = frame[int(self.roi[1]) : int(self.roi[1]) + int(self.roi[3]) , int(self.roi[0]) : int(self.roi[0]) + int(self.roi[2])]
+
             if self.comboBox.currentText() == "Обработанная":
                 mask = self.object_detector.apply(frame)
 
@@ -517,7 +517,7 @@ class SettingsPage(QWidget):
             self.video_label.setPixmap(pixmap)
 
         else:
-            self.video_.set(cv2.CAP_PROP_POS_FRAMES, 0) # если видео закончилось, воспроизводим его заново
+            self.video_capture.set(cv2.CAP_PROP_POS_FRAMES, 0) # если видео закончилось, воспроизводим его заново
 
     def select_roi(self):
         self.pause_video()
