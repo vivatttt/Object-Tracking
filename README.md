@@ -29,13 +29,10 @@ venv/Scripts/activate
 ```
 Then you need to add all the necessary libraries
 ```
-pip install opencv-contrib-python
-```
-```
-pip install PyQt5
+pip install -r requirements.txt
 ```
 And finally launch the *Object Tracker 3000 (!!)*
 ```
-python main.py
+python -m run
 ```
 
